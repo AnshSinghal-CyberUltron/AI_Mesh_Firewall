@@ -36,6 +36,7 @@ from core.firewall_v2_map import (
     org_listed,
     retired_unchanged,
     rewrite_served_by_v2,
+    surface_drafts,
 )
 from core.firewall_v2_map import _setting as _deployment_setting
 from core.v2_audit_adapter import parse_org_map
@@ -187,8 +188,14 @@ def document_body(
     slug = org_slug if org_slug is not None else org_id
     # Customer/firewall rows get the default priority only when they carry none of their own, so
     # the built-in detector rows keep the explicit priority their emitter gave them (D-32).
-    rules = [{"priority": _PRIORITY, **row} for row in drafts_for(payload)]
-    rules.extend({**row, "priority": _PRIORITY} for row in threat_drafts(payload, mode=rules_mode))
+    builtin = drafts_for(payload)
+    threats = threat_drafts(payload, mode=rules_mode)
+    rules = [{"priority": _PRIORITY, **row} for row in builtin]
+    rules.extend({**row, "priority": _PRIORITY} for row in threats)
+    # F4/F3: the same built-ins on the non-chat surfaces, behind the D-8 gate (chat rows unchanged).
+    rules.extend(
+        {"priority": _PRIORITY, **row} for row in surface_drafts([*builtin, *threats], rules_mode)
+    )
     rules.extend(policy_rows)
     if payload.get("firewall_enabled") is not False:
         rules.extend(platform_rows(slug))
@@ -295,13 +302,22 @@ def policy_drafts(
     return drafts, unsupported
 
 
-def publish_for_org(org: Any) -> dict[str, object]:
+def publish_for_org(
+    org: Any, *, publisher: str | None = None, notes: bool = True
+) -> dict[str, object]:
     """Recompile one organization's document and store it. Returns the console's status note.
 
     Rebuilt INSIDE a row lock on the organization, from the rows as committed: two saves racing
     each publish the newest state, whichever commits last (a document built from a payload
-    passed in could land older than the save it followed). ``unavailable`` leaves the stored
-    document as it was, and the projector keeps serving it.
+    passed in could land older than the save it followed). The dev copy is written inside the
+    same lock, so it lands in the same order as the stored documents. ``unavailable`` leaves the
+    stored document as it was, and the projector keeps serving it.
+
+    The document is stamped with ``publisher``, the fingerprint of the running publisher
+    (``core.v2_plan_rollout.fingerprint``; computed here when not passed in), so the start-up
+    rollout can tell which documents an older release or other settings built. ``notes=False``
+    skips the console status note (a second config query and the compliance validation): the
+    rollout discards it.
     """
     if org is None or not getattr(org, "pk", None):
         return {"status": "skipped", "reason": "no_org"}
@@ -309,6 +325,10 @@ def publish_for_org(org: Any) -> dict[str, object]:
     from django.db import transaction
 
     try:
+        if publisher is None:
+            from core.v2_plan_rollout import fingerprint
+
+            publisher = fingerprint()
         with transaction.atomic():
             locked = Organization.objects.select_for_update().get(pk=org.pk)
             payload = _firewall_payload(locked)
@@ -320,7 +340,8 @@ def publish_for_org(org: Any) -> dict[str, object]:
                 rules_mode=rules_mode,
             )
             raw = json.dumps(body, separators=(",", ":"), sort_keys=True).encode("utf-8")
-            revision = _store(locked, raw)
+            revision = _store(locked, raw, publisher)
+            dev_copy = _dev_copy(locked.slug, payload, rows, eligible, rules_mode)
     except Exception:
         logger.exception("gateway-v2 plan document was not stored for org %s", org.pk)
         return {"status": "unavailable", "org_id": getattr(org, "slug", None)}
@@ -331,9 +352,10 @@ def publish_for_org(org: Any) -> dict[str, object]:
         "rules": raw.count(b'"rule_id"'),
         "unsupported": unsupported,
         "streaming_mode_promoted": promoted,
-        "dev_copy": _dev_copy(locked.slug, payload, rows, eligible, rules_mode),
+        "dev_copy": dev_copy,
     }
-    note.update(_notes(locked, payload, eligible, rules_mode))
+    if notes:
+        note.update(_notes(locked, payload, eligible, rules_mode))
     return note
 
 
@@ -341,7 +363,17 @@ def _drafts_for_org(
     slug: str, payload: Mapping[str, Any], rules_mode: str
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Policy rows plus the keyword row, with the output-policy fields applied (GW27)."""
-    policies = _policy_rows(slug)
+    return drafts_from_policies(slug, payload, rules_mode, _policy_rows(slug))
+
+
+def drafts_from_policies(
+    slug: str,
+    payload: Mapping[str, Any],
+    rules_mode: str,
+    policies: Sequence[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """:func:`_drafts_for_org` for policy records already read (the rollout's probe documents)."""
+    policies = list(policies)
     keyword = keyword_row(payload, rules_mode)
     if keyword is not None:
         policies.append(keyword)
@@ -379,18 +411,32 @@ def _notes(
         logger.exception("compliance violations were not computed for org %s", org.pk)
         notes["compliance_violations"] = "unavailable"
     return notes
-def _store(org: Any, raw: bytes) -> int:
-    """Upsert the document; the revision rises only when the body changed."""
+def _store(org: Any, raw: bytes, publisher: str = "") -> int:
+    """Upsert the document; the revision rises only when the body changed.
+
+    The stamp (``publisher`` at ``publisher_revision``) is written either way: a body another
+    release or other settings would also build keeps its revision, and only its stamp moves.
+    """
     from core.models import V2PlanDocument
 
     text = raw.decode("utf-8")
     document = V2PlanDocument.objects.filter(organization=org).first()
     if document is None:
-        return V2PlanDocument.objects.create(organization=org, body=text, revision=1).revision
+        return V2PlanDocument.objects.create(
+            organization=org, body=text, revision=1, publisher=publisher, publisher_revision=1,
+        ).revision
     if document.body != text:
         document.body = text
         document.revision += 1
-        document.save(update_fields=["body", "revision", "updated_at"])
+        document.publisher = publisher
+        document.publisher_revision = document.revision
+        document.save(
+            update_fields=["body", "revision", "publisher", "publisher_revision", "updated_at"]
+        )
+    elif (document.publisher, document.publisher_revision) != (publisher, document.revision):
+        V2PlanDocument.objects.filter(pk=document.pk).update(
+            publisher=publisher, publisher_revision=document.revision,
+        )
     return document.revision
 
 

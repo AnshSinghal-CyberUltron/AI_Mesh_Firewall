@@ -1,0 +1,12 @@
+# PR #115 round 3, tree at 666e001f (code), control venv (Django 6.0.10); settings: local pgvector shim (not committed). 2026-11-12T11:35:47Z
+baseline 46a5324d017662c5 (PYTHONHASHSEED 0, 1, 2, 12345 give 1 distinct value)
+| change | raised by | fingerprint changed |
+|---|---|---|
+| customer default priority 200 -> 150 (an R24 answer) | B-D1 | True (e31812e872a1e187) |
+| customer rows fail_open | B-D1 | True (61da2f4797429aa5) |
+| monitor-posture org rows | B-D1 | True (aa43cf79f4b903ac) |
+| canary row action (an org in V2_CANARY_ORGS) | A-D1 | True (94f3832ca3e98437) |
+| FirewallConfig default tier2_fail_closed_enabled True -> False (never-saved orgs) | A-D1 | True (28ca45392ad48bc2) |
+| a new data migration in core | A-D1 | True (e7e1287983cfd1d5) |
+| cost: a comment-only edit to a publisher module | author | True (d04787ea07c4a9ee) |
+| control: an edit outside the publisher (core/views.py comment) | author | False (46a5324d017662c5) |

@@ -1,0 +1,8 @@
+# origin/develop 25c33c86, run from gateway_v2/: ../../venv-ci/bin/python <evidence>/repro_f3.py
+rules: [('fw-credential-output', 'output', ['chat']), ('fw-jailbreak-input', 'input', ['chat']), ('fw-pii-input', 'input', ['chat']), ('fw-pii-output', 'output', ['chat']), ('fw-prompt_injection-input', 'input', ['chat']), ('fw-threat-command-input', 'input', ['chat']), ('fw-threat-jailbreak-input', 'input', ['chat']), ('fw-threat-prompt_injection-input', 'input', ['chat']), ('fw-toxicity-input', 'input', ['chat']), ('out_ip_leak', 'output', ['chat'])]
+input  aws_key   findings=['secret']  chat=allow mcp=allow rag=allow vector=allow embeddings=allow
+input  injection findings=['prompt_injection']  chat=block mcp=allow rag=allow vector=allow embeddings=allow
+input  email     findings=['pii']  chat=redact mcp=allow rag=allow vector=allow embeddings=allow
+output aws_key   findings=['secret']  chat=allow mcp=allow rag=allow vector=allow embeddings=allow
+output injection findings=['prompt_injection']  chat=allow mcp=allow rag=allow vector=allow embeddings=allow
+output email     findings=['pii']  chat=redact mcp=allow rag=allow vector=allow embeddings=allow

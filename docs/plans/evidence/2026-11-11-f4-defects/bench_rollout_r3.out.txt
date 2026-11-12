@@ -1,0 +1,16 @@
+# PR #115 round 3: rollout cost at 666e001f (bench_rollout_r3.py, run by run_control_r3.sh after the mutants; local Postgres 16, heavy and ctl-db locks held; load at start load 0.89 1.16 1.56).
+# 'sweep' orgs were bulk-created without FirewallConfig rows or policies; the 100k fleet rows carry a current stamp and a 2-byte body. botocore lines in bench.log come from the apps' warm-up in the test process (no AWS credentials) and are not part of the measurement.
+BENCH fingerprint(): median=2.01 ms p95=2.72 ms (n=200)
+BENCH unapplied_migrations(): median=7.70 ms p95=8.52 ms (n=5)
+BENCH sweep (create): orgs=1001 status=swept published=1001 wall=8.18s (8.18 ms/org) process_cpu=6.12s (6.11 ms/org)
+BENCH publish_for_org notes=True: 8.87 ms/org (n=200, body unchanged)
+BENCH publish_for_org notes=False: 8.00 ms/org (n=200, body unchanged)
+BENCH fleet: active orgs=101001, first fleet pk > 3420
+BENCH reconcile() with nothing stale: median=109.08 ms p95=132.18 ms (n=20)
+BENCH stale_orgs(...).exists() with nothing stale: median=101.43 ms p95=134.92 ms (n=20)
+BENCH status() (two counts): median=188.60 ms p95=266.06 ms (n=10)
+BENCH stale_orgs(...).exists() with only the highest pk stale: median=105.65 ms p95=206.73 ms (n=20)
+BENCH reconcile() republishing that one org: status=swept published=1 268 ms
+BENCH stale query: FROM "auth_api_organization" LEFT OUTER JOIN "core_v2_plan_document" ON ("auth_api_organization"."id" = "core_v2_plan_document"."organization_id") WHERE ("auth_api_organization"."is_active" AND NOT ("core_v2_plan_document"."publisher" = 46a5324d017662c56e23d76e77a639485114c2b233c4dd7ce5368e560d1f40f7 AND "core_v2_plan_document"."publisher" IS NOT NULL AND "core_v2_plan_document"."publisher_revision" = ("core_v2_plan_document"."revision") AND "core_v2_plan_document"."publisher_revision" IS NOT NULL)) ORDER BY "auth_api_organization"."name" ASC
+Ran 1 test in 31.778s
+OK

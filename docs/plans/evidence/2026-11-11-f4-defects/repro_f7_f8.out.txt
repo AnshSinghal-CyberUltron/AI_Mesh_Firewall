@@ -1,0 +1,3 @@
+# origin/develop 25c33c86, run from gateway_v2/: ../../venv-ci/bin/python <evidence>/repro_f7_f8.py
+F7 dev adapter missing collection -> provider_unreachable -> HTTP 502
+F8 whole_response chains grounding: False

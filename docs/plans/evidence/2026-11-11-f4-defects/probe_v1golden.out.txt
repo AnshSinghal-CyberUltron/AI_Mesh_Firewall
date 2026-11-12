@@ -1,0 +1,20 @@
+# origin/develop 943a5f21, run from gateway/: /home/claude/work/venv-v1/bin/python <evidence>/probe_v1golden.py
+== input verdicts (expected block/redact by the golden)
+plain injection                    action=allow   threat=                  
+plain SSN (redact floor)           action=redact  threat=pii               
+plain AKIA (redact floor)          action=redact  threat=secret            
+g33 html-entity SSN                action=allow   threat=                  
+g33 percent AKIA                   action=allow   threat=                  
+g53 markdown-split SSN             action=allow   threat=                  
+g69 SSN split across turns         action=allow   threat=                  
+   g33 html-entity SSN: bytes after redact_all='my ssn is &#49;&#50;&#51;&#45;&#52;&#53;&#45;&#54;&#55;&#56;&#57;' recoverable_after_canon=False
+   g53 markdown-split SSN: bytes after redact_all='my ssn is 1**2**3-45-6789 please store it' recoverable_after_canon=False
+   g33 percent AKIA: bytes after redact_all='key [ENCODED_SECRET_REDACTED]' recoverable_after_canon=False
+== plain email oracle
+   redact_all: 'reach me at j***@e***.com' | detect_pii(probe): {'email_smart_masked': 'j***@e***.com'}
+== output side
+   g35 _scan_output_sync action: flag | egress: The SSN is 123-45-6789.
+   redact_all(output) directly: The SSN is ***-**-6789.
+== g101 parenthesized card
+   detect_pii: {} | survived: True
+   (Luhn of 4111-1111-1111-1119 valid?) False

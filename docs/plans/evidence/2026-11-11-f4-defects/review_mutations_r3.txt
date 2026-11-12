@@ -1,0 +1,32 @@
+# PR #115 round 3: control clean run and rollout mutants at 666e001f (run_control_r3.sh; local Postgres 16 + Redis, pgvector settings shim with its own test DB, not committed; heavy and ctl-db locks held).
+# Each mutant is one edit (see run_control_r3.sh) run against core.tests.test_v2_plan_rollout (34 tests). rc=124 = the suite hung under the mutant and was stopped after 300 s (killed: an unmutated run takes ~4 s).
+start 2026-11-12T11:26:11Z head 666e001f load 0.89 1.16 1.56
+clean (fresh test DB) rc=0 wall=17s Ran 70 tests in 6.094s OK 
+entrypoint-clamp pytest rc=0 wall=1s 1 passed in 0.19s
+M01_code_not_hashed rc=1 wall=15s Ran 34 tests in 3.821s FAILED (failures=6)  :: FAIL test_it_follows_any_change_to_any_publisher_module;
+M02_migrations_not_hashed rc=1 wall=6s Ran 34 tests in 3.960s FAILED (failures=3)  :: FAIL test_it_follows_a_new_migration_of_the_publisher_inputs;
+M03_never_saved_doc_dropped rc=1 wall=7s Ran 34 tests in 3.876s FAILED (failures=1)  :: FAIL test_it_follows_a_model_default_of_a_never_saved_org;
+M04_exfil_hosts_unhashed rc=1 wall=6s Ran 34 tests in 4.079s FAILED (failures=1)  :: FAIL test_it_follows_every_setting_the_publisher_reads;
+M05_stale_means_missing_only rc=1 wall=7s Ran 34 tests in 3.793s FAILED (failures=9)  :: FAIL test_a_changed_publisher_republishes_every_active_org_once;FAIL test_a_failed_org_does_not_hold_back_the_orgs_after_it;FAIL test_a_failed_org_stays_stale_and_only_it_is_retried;FAIL test_a_persistently_failing_org_settles_as_partial;FAIL test_a_rollback_image_that_changes_or_inserts_documents_leaves_them_stale;FAIL test_an_old_replica_save_after_the_sweep_is_repaired_by_the_next_start;FAIL test_the_command_runs_the_rollout_and_reports_status;FAIL test_the_gate_flip_and_the_rollback_reach_an_org_that_never_saves;FAIL test_the_sweep_reports_progress;
+M06_inactive_swept rc=1 wall=6s Ran 34 tests in 4.101s FAILED (failures=6)  :: FAIL test_a_changed_publisher_republishes_every_active_org_once;FAIL test_a_failed_org_does_not_hold_back_the_orgs_after_it;FAIL test_a_failed_org_stays_stale_and_only_it_is_retried;FAIL test_a_persistently_failing_org_settles_as_partial;FAIL test_the_command_runs_the_rollout_and_reports_status;FAIL test_the_sweep_reports_progress;
+M07_stamp_kept_when_body_same rc=1 wall=7s Ran 34 tests in 4.015s FAILED (failures=1)  :: FAIL test_a_console_publish_stamps_the_running_publisher;
+M08_stamp_kept_when_body_changes rc=1 wall=6s Ran 34 tests in 3.960s FAILED (failures=9)  :: FAIL test_a_changed_publisher_republishes_every_active_org_once;FAIL test_a_console_publish_stamps_the_running_publisher;FAIL test_a_failed_org_stays_stale_and_only_it_is_retried;FAIL test_a_persistently_failing_org_settles_as_partial;FAIL test_a_rollback_image_that_changes_or_inserts_documents_leaves_them_stale;FAIL test_an_old_replica_save_after_the_sweep_is_repaired_by_the_next_start;FAIL test_nothing_stale_is_one_query_and_no_redis;FAIL test_the_command_runs_the_rollout_and_reports_status;FAIL test_the_sweep_reports_progress;
+M09_tries_not_counted rc=1 wall=7s Ran 34 tests in 4.688s FAILED (failures=2)  :: FAIL test_a_partial_rollout_fails_the_command;FAIL test_a_persistently_failing_org_settles_as_partial;
+M10_skip_ignored rc=1 wall=7s Ran 34 tests in 4.875s FAILED (failures=2)  :: FAIL test_a_partial_rollout_fails_the_command;FAIL test_a_persistently_failing_org_settles_as_partial;
+M11_lost_lock_ignored rc=1 wall=6s Ran 34 tests in 4.295s FAILED (failures=1)  :: FAIL test_a_sweep_that_loses_its_lock_stops_and_leaves_the_new_owner_alone;
+M12_release_not_owner_checked rc=1 wall=7s Ran 34 tests in 4.141s FAILED (failures=2)  :: FAIL test_a_sweep_that_loses_its_lock_stops_and_leaves_the_new_owner_alone;FAIL test_release_never_deletes_another_runners_lock;
+M13_lock_not_exclusive rc=1 wall=7s Ran 34 tests in 4.209s FAILED (failures=2)  :: FAIL test_another_runner_holding_the_lock_means_no_work_here;FAIL test_settling_retries_until_the_other_runner_is_gone;
+M14_migrations_not_awaited rc=1 wall=7s Ran 34 tests in 4.242s FAILED (errors=1)  :: ERROR test_pending_migrations_hold_the_sweep;
+M15_no_early_stop rc=1 wall=7s Ran 34 tests in 4.546s FAILED (failures=1)  :: FAIL test_a_systemic_failure_ends_the_sweep_early;
+M16_keyset_not_advanced rc=124 wall=300s  :: 
+M17_sweep_builds_the_note rc=1 wall=7s Ran 34 tests in 4.391s FAILED (failures=1)  :: FAIL test_the_sweep_skips_the_console_note;
+M18_dev_copy_after_commit rc=1 wall=6s Ran 34 tests in 4.093s FAILED (failures=1)  :: FAIL test_the_dev_copy_is_written_inside_the_row_lock;
+M20_stamp_revision_not_checked rc=1 wall=7s Ran 34 tests in 3.989s FAILED (failures=1)  :: FAIL test_a_rollback_image_that_changes_or_inserts_documents_leaves_them_stale;
+M21_stamp_revision_not_moved rc=1 wall=7s Ran 34 tests in 4.119s FAILED (failures=9)  :: FAIL test_a_changed_publisher_republishes_every_active_org_once;FAIL test_a_console_publish_stamps_the_running_publisher;FAIL test_a_failed_org_stays_stale_and_only_it_is_retried;FAIL test_a_persistently_failing_org_settles_as_partial;FAIL test_a_rollback_image_that_changes_or_inserts_documents_leaves_them_stale;FAIL test_an_old_replica_save_after_the_sweep_is_repaired_by_the_next_start;FAIL test_nothing_stale_is_one_query_and_no_redis;FAIL test_the_command_runs_the_rollout_and_reports_status;FAIL test_the_sweep_reports_progress;
+M19_partial_not_reported rc=1 wall=6s Ran 34 tests in 3.745s FAILED (failures=1, errors=1)  :: ERROR test_a_persistently_failing_org_settles_as_partial;FAIL test_a_partial_rollout_fails_the_command;
+E1_no_set_plus_e rc=1 wall=6s Ran 34 tests in 3.867s FAILED (failures=1)  :: FAIL test_gunicorn_only_ever_reaps_a_zero_exit_from_the_rollout;
+E2_absolute_manage_py rc=1 wall=6s Ran 34 tests in 3.871s FAILED (failures=1)  :: FAIL test_the_rollout_runs_as_a_management_command;
+E3_no_subshell_head_shape rc=1 wall=6s Ran 34 tests in 3.878s FAILED (failures=6)  :: FAIL test_gunicorn_only_ever_reaps_a_zero_exit_from_the_rollout;FAIL test_the_rollout_runs_as_a_management_command;
+E4_foreground rc=1 wall=7s Ran 34 tests in 4.352s FAILED (failures=5)  :: FAIL test_gunicorn_only_ever_reaps_a_zero_exit_from_the_rollout;
+bench rc=0 wall=34s
+end 2026-11-12T11:34:51Z load 1.08 1.16 1.41 clean=yes

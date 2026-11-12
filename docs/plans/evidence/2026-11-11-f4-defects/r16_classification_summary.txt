@@ -1,0 +1,15 @@
+# Reviewer B, PR #115 comment 6815656865 (runs/115-B/r16_classification_summary.txt), head f1984718. Copied verbatim below.
+class                                     count  pass_with_pre3.1_body  still_fail
+R16a input PII/secret miss                    21                     21           0
+R16b injection/jailbreak floor               125                    125           0
+R16c output (unverified at OutputGuard)        5                      0           5
+R16d stale fixture                             2                      0           2
+total 153
+
+R16a input PII/secret miss: g33_encoded_pii_secret_blocksx5, g53_input_obfuscated_pii_blockedx4, g69_cross_turn_split_value_detectedx4, g71_cross_role_split_value_detectedx3, g87_input_cf_encoded_pii_is_blockedx4, g91_input_markdown_entity_blockedx1
+
+R16b injection/jailbreak floor: g100_ascii85_injection_is_blockedx2, g101_parenthesized_letter_injection_blockedx2, g102_cyrillic_extra_homoglyph_injection_blockedx2, g103_legacy_function_call_injection_blockedx2, g104_responses_function_call_defended_via_conversionx2, g105_flat_responses_tool_injection_blockedx2, g105_nested_chat_tool_still_blockedx1, g106_responses_instructions_scanned_via_conversionx1, g106_responses_text_format_scanned_via_conversionx1, g108_compound_obfuscated_injection_blockedx8, g15_verb_alternation_injection_blocksx5, g15_x_g6_disregard_family_multiturn_split_blocksx1, g17_unicode_tag_smuggled_injection_blocksx3, g19_smallcap_injection_blocksx3, g22_nested_encoded_injection_blocksx3, g23_structural_injection_still_blocksx5, g26_compound_encoded_injection_blocksx2, g27_developer_role_split_injection_blocksx2, g28_semantic_jailbreak_blocksx7, g29_semantic_jailbreak_blocksx8, g32_encoded_injection_blocksx6, g34_layered_encoding_blocksx5, g37_gemma_turn_token_spoof_blocksx3, g3_split_injection_must_blockx2, g6_multiturn_split_injection_must_blockx3, g74_bidi_injection_is_blockedx3, g75_nested_cf_injection_is_blockedx2, g80_enforcement_precedencex4, g95_greek_homoglyph_injection_is_blockedx5, g95_greek_homoglyph_parity_with_asciix3, g96_styled_unicode_injection_is_blockedx13, g97_base32_injection_is_blockedx3, g98_base85_injection_is_blockedx2, g99_forged_turn_still_blockedx5, known_injection_is_blockedx4
+
+R16c output (unverified at OutputGuard): g10_nonredactable_category_spans_are_ignoredx1, g35_plain_output_pii_still_masksx1, g88_encoded_credential_output_maskedx3
+
+R16d stale fixture: g101_parenthesized_digit_pii_detected_and_maskedx1, plain_pii_secret_is_redactedx1

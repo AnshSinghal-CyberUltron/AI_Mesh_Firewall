@@ -1,0 +1,10 @@
+# origin/develop 25c33c86, run from gateway_v2/: ../../venv-ci/bin/python <evidence>/repro_f6.py
+opens: 1 terminal: ['upstream_error']
+decision: primary a None None
+decision: refused_internal_error None upstream_error upstream_error
+stage: StageOutcome(name='auth', action='allow', ran=True, rule='')
+stage: StageOutcome(name='rate_limit', action='allow', ran=True, rule='')
+stage: StageOutcome(name='input_scan', action='allow', ran=True, rule='')
+stage: StageOutcome(name='model_routing', action='skip', ran=False, rule='refused_internal_error|-|0|-|m')
+stage: StageOutcome(name='model_output', action='error', ran=True, rule='upstream_error')
+stage: StageOutcome(name='output_guardrail', action='skip', ran=False, rule='')

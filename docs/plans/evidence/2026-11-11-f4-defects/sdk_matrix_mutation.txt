@@ -1,0 +1,42 @@
+ .../2026-11-04-gw34/sdk-matrix-report.json         | 65 +++++++++++-----------
+ 1 file changed, 32 insertions(+), 33 deletions(-)
+diff --git a/docs/plans/evidence/2026-11-04-gw34/sdk-matrix-report.json b/docs/plans/evidence/2026-11-04-gw34/sdk-matrix-report.json
+index ecd15cee..ff746105 100644
+--- a/docs/plans/evidence/2026-11-04-gw34/sdk-matrix-report.json
++++ b/docs/plans/evidence/2026-11-04-gw34/sdk-matrix-report.json
+@@ -2,54 +2,54 @@
+  "clients": {
+   "node": {
+    "a": {
+-    "passed": 1,
+-    "ran": 1,
+-    "skipped": null
++    "passed": 0,
++    "ran": 0,
++    "skipped": "Skipped: node_modules/openai is absent (run `npm ci` in tests/openai_conformance/node)"
+    },
+    "b": {
+-    "passed": 1,
+-    "ran": 1,
+-    "skipped": null
++    "passed": 0,
++    "ran": 0,
++    "skipped": "Skipped: node_modules/openai is absent (run `npm ci` in tests/openai_conformance/node)"
+    },
+    "c": {
+-    "passed": 1,
+-    "ran": 1,
+-    "skipped": null
++    "passed": 0,
++    "ran": 0,
++    "skipped": "Skipped: node_modules/openai is absent (run `npm ci` in tests/openai_conformance/node)"
+    },
+    "d": {
+-    "passed": 1,
+-    "ran": 1,
+-    "skipped": null
++    "passed": 0,
++    "ran": 0,
++    "skipped": "Skipped: node_modules/openai is absent (run `npm ci` in tests/openai_conformance/node)"
+    },
+    "e": {

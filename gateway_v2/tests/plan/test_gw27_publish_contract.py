@@ -114,7 +114,9 @@ def test_toggling_threat_intel_off_removes_only_the_threat_rules() -> None:
 
     on, off = ids(_BASE), ids({**_BASE, "threat_intel_enabled": False})
     names = ("prompt_injection", "jailbreak", "command")
-    assert on - off == {f"fw-threat-{c}-input" for c in names}
+    # F4/F3: each threat row also has its non-chat extension row; both go with the toggle.
+    chat = {f"fw-threat-{c}-input" for c in names}
+    assert on - off == chat | {f"{rid}-ext" for rid in chat}
     assert off <= on
 
 
@@ -361,7 +363,8 @@ def test_property_every_built_field_reaches_the_document() -> None:
         ), ctx
         threat = [r for rid, r in rules.items() if rid.startswith("fw-threat-")]
         if payload["threat_intel_enabled"]:
-            assert len(threat) == 3, ctx
+            # F4/F3: three chat rows plus their three non-chat extension rows, same values.
+            assert sorted(len(r["surfaces"]) for r in threat) == [1, 1, 1, 3, 3, 3], ctx
             assert {r["action"] for r in threat} == {
                 "block" if payload["auto_block_threats"] else "flag"}, ctx
             want = payload["threat_score_threshold"] / 100

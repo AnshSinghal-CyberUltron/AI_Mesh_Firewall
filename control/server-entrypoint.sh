@@ -107,4 +107,32 @@ if [ "${CONTROL_ENTRYPOINT_DRYRUN:-0}" = "1" ]; then
     exit 0
 fi
 
+# F4 (PR #115): republish the orgs whose gateway-v2 plan document another publisher built: a
+# release, a data migration of its inputs, or V2_PLAN_NEW_RULES_MODE or another publish setting (a
+# flip and a rollback are env changes, which take effect only by recreating this container). Once
+# per container start, not per gunicorn worker; in the background so the health check never waits
+# on a sweep; one indexed query when nothing is stale (core/v2_plan_rollout.py). The retries cover
+# a container that starts before deploy-ec2.sh runs migrate. V2_PLAN_ROLLOUT_ON_START=0 disables
+# it; then run `manage.py sync_v2_plan_documents --if-changed` by hand after every deploy and gate
+# change.
+#
+# The launch shape matters (PR #115 review D3):
+# - `exec "$@"` makes gunicorn the parent of everything started here, and gunicorn 26 handles
+#   every child it reaps as a worker: a non-zero exit logs a worker crash, and exit 3 or 4 halts
+#   the server. So the pipeline runs inside a subshell that always exits 0. `set +e` first: the
+#   subshell inherits `set -e`, which would otherwise end it with sed's status before `exit 0`.
+# - `manage.py` is run by its relative name from its own directory: the apps' start-up guard
+#   (`"manage.py" in sys.argv`, core/apps.py and policy/apps.py) must see a management command,
+#   or this process would also start the server's background jobs.
+if [ "${V2_PLAN_ROLLOUT_ON_START:-1}" != "0" ]; then
+    (
+        set +e
+        cd "$(dirname "$0")" \
+            && "$PYTHON_BIN" manage.py sync_v2_plan_documents --if-changed \
+                --attempts "${V2_PLAN_ROLLOUT_ATTEMPTS:-20}" --wait "${V2_PLAN_ROLLOUT_WAIT_S:-30}" \
+                2>&1 | sed 's/^/[control-entrypoint] v2-plan-rollout: /' >&2
+        exit 0
+    ) &
+fi
+
 exec "$@"
