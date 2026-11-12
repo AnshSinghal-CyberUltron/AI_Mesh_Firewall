@@ -1,0 +1,123 @@
+Answers to the #137 reviews (5870839357 A, 5870792563 B), 12 Nov 2026. Host: the 2-CPU agent host.
+Harness and raw outputs: /home/claude/work/runs/137-138-author/harness137/ (make_proj.sh, run_case.sh, mutate.py,
+simulate_weights.py). pytest 9.2.0 and pytest-timeout 2.4.0 from /home/claude/work/venv-ci (Python 3.12.3);
+the verify CLI and the self-tests with python3 3.13.
+
+== 1. Selected is not ran (B S1, A NIT 1)
+A 4-file, 8-test project in 2 shards, each case adding one way to leave tests unrun; then
+'amf_pytest_shards.py verify --expect-collection'. Before = the plugin at 790e3e41; after = this head.
+
+-- before (790e3e41):
+== plain
+verify exit 0: ### pytest shards: 8 tests in 2 shards, each selected exactly once, union equal to the unsharded collection
+== exit0-in-test
+verify exit 0: ### pytest shards: 8 tests in 2 shards, each selected exactly once, union equal to the unsharded collection
+== exit0-in-teardown
+verify exit 0: ### pytest shards: 8 tests in 2 shards, each selected exactly once, union equal to the unsharded collection
+== hookwrapper-drop
+verify exit 0: ### pytest shards: 8 tests in 2 shards, each selected exactly once, union equal to the unsharded collection
+== hookwrapper-add
+verify exit 0: ### pytest shards: 8 tests in 2 shards, each selected exactly once, union equal to the unsharded collection
+== honest-failure
+verify exit 1: ::error title=pytest shards::pytest failed in shard 0: exit 1
+== kinds
+verify exit 1: ::error title=pytest shards::pytest failed in shard 0: exit 1
+
+-- after:
+== plain
+shard 0: pytest exit 0 | 4 passed, 4 deselected in 0.01s
+shard 1: pytest exit 0 | 4 passed, 4 deselected in 0.01s
+verify exit 0: ### pytest shards: 8 tests in 2 shards, each selected exactly once and run to the end, union equal to the unsharded collection
+== exit0-in-test
+shard 0: pytest exit 0 | !!!!!!!!!!!!!!!!!!!!!!!!!! _pytest.outcomes.Exit: bye !!!!!!!!!!!!!!!!!!!!!!!!!!
+shard 1: pytest exit 0 | 4 passed, 4 deselected in 0.01s
+verify exit 1: ::error title=pytest shards::shard 0: 4 of 4 selected tests did not run to the end, e.g. ['tests/test_a.py::test_a_1 (set up, never called)', 'tests/test_a.py::test_a_2 (never set up)', 'tests/test_c.py::test_c_1 (never set up)']
+== exit0-in-teardown
+shard 0: pytest exit 0 | !!!!!!!!!!!!!!!!!!!!!!!!!! _pytest.outcomes.Exit: bye !!!!!!!!!!!!!!!!!!!!!!!!!!
+shard 1: pytest exit 0 | 4 passed, 4 deselected in 0.01s
+verify exit 1: ::error title=pytest shards::shard 0: 4 of 4 selected tests did not run to the end, e.g. ['tests/test_a.py::test_a_1 (never torn down)', 'tests/test_a.py::test_a_2 (never set up)', 'tests/test_c.py::test_c_1 (never set up)']
+== hookwrapper-drop
+shard 0: pytest exit 0 | 3 passed, 4 deselected in 0.01s
+shard 1: pytest exit 0 | 4 passed, 4 deselected in 0.01s
+verify exit 1: ::error title=pytest shards::shard 0: 1 of 4 selected tests did not run to the end, e.g. ['tests/test_a.py::test_a_2 (never set up)']
+== hookwrapper-add
+shard 0: pytest exit 0 | 6 passed, 4 deselected in 0.01s
+shard 1: pytest exit 0 | 4 passed, 4 deselected in 0.01s
+verify exit 1: ::error title=pytest shards::shard 0: 2 tests ran without being selected, e.g. ['tests/test_d.py::test_d_1', 'tests/test_d.py::test_d_2']
+== honest-failure
+shard 0: pytest exit 1 | 1 failed, 3 passed, 4 deselected in 0.02s
+shard 1: pytest exit 0 | 4 passed, 4 deselected in 0.01s
+verify exit 1: ::error title=pytest shards::pytest failed in shard 0: exit 1
+== kinds
+shard 0: pytest exit 1 | 2 passed, 1 skipped, 4 deselected, 2 xfailed, 1 error in 0.03s
+shard 1: pytest exit 0 | 4 passed, 6 deselected in 0.01s
+verify exit 1: ::error title=pytest shards::pytest failed in shard 0: exit 1
+
+Cases: exit0-in-test = pytest.exit('bye', returncode=0) in a test (B's case 1); exit0-in-teardown = the same in a
+fixture finalizer; hookwrapper-drop = a conftest pytest_collection_modifyitems hookwrapper that drops a failing test
+only when --shard-count is set (B's case 2); hookwrapper-add = a hookwrapper that re-adds another shard's file
+(those tests ran twice); honest-failure = a plain failing test; kinds = setup skip, setup error, strict xfail,
+xfail(run=False): complete runs, so only the exit status (1, the setup error) fails them.
+
+== 2. Mutation tests of the new safeguards (each applied to a copy; self-tests rerun)
+drop the unfinished-test check: FAILED (failures=4)
+drop the ran-unselected check: FAILED (failures=1)
+setup report alone counts as ran (B's prototype rule): FAILED (failures=1)
+no teardown requirement: FAILED (failures=1)
+no weight floor (old behaviour): FAILED (failures=1)
+collection count cross-check removed: FAILED (failures=1)
+collection block not cut at blank line: FAILED (failures=2, errors=3)
+
+== 3. Collection parser (A NIT 4)
+collection_ids(): ids from the first '::' line to the next blank line; their count must equal the
+'N tests collected' line. Self-tests cover a stdout warning before the ids, a warnings summary after them,
+'N/M tests collected (K deselected)', a truncated listing, no summary line, and an empty file.
+Real listing (this head, gateway_v2, plain 'pytest --collect-only -q'): 5162 tests collected in 2.95s;
+collection_ids() returns 5162 ids.
+
+== 4. Weights (B N3): committed weights file, 8 shards, real ids
+old (790e3e41): tests [251, 296, 254, 284, 281, 383, 424, 2989] files [34, 34, 34, 35, 35, 35, 35, 288] load s [180.5, 180.5, 180.5, 180.5, 180.5, 180.5, 180.5, 180.4] max 180.5 | union==collection True dupes 0
+new: tests [422, 443, 432, 509, 518, 602, 659, 1577] files [54, 54, 53, 54, 54, 54, 54, 153] load s [180.5, 180.5, 180.5, 180.5, 180.5, 180.5, 180.5, 180.5] max 180.5 | union==collection True dupes 0
+254 of the 530 files in the weights file weigh 0.0 (under 0.05 s, rounded). Before, all of them landed on
+shard 7 (2,989 tests); with the 0.001 s floor they spread. Weighted maximum unchanged (180.5 s).
+
+8-shard collect-only through the plugin with real pytest, this head:
+  shard 0: 422/5162 tests collected (4740 deselected) in 2.90s
+  shard 1: 443/5162 tests collected (4719 deselected) in 2.97s
+  shard 2: 432/5162 tests collected (4730 deselected) in 2.98s
+  shard 3: 509/5162 tests collected (4653 deselected) in 2.91s
+  shard 4: 518/5162 tests collected (4644 deselected) in 3.02s
+  shard 5: 602/5162 tests collected (4560 deselected) in 3.09s
+  shard 6: 659/5162 tests collected (4503 deselected) in 3.16s
+  shard 7: 1577/5162 tests collected (3585 deselected) in 2.95s
+  union 5162, unique 5162, equal to the unsharded collection.
+
+B's hostile-weights script (/home/claude/work/runs/137-B/exp/adversarial_weights.py) on this head:
+none                       union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [646, 646, 645, 645, 645, 645, 645, 645]
+all-zero                   union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [655, 586, 609, 562, 592, 561, 797, 800]
+negative                   union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [646, 646, 645, 645, 645, 645, 645, 645]
+nan                        union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [646, 646, 645, 645, 645, 645, 645, 645]
+inf-one-file               union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [646, 646, 645, 645, 645, 645, 645, 645]
+all-inf                    union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [646, 646, 645, 645, 645, 645, 645, 645]
+strings                    union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [646, 646, 645, 645, 645, 645, 645, 645]
+huge-one                   union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [2, 738, 737, 737, 737, 737, 737, 737]
+unknown-files-only         union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [646, 646, 645, 645, 645, 645, 645, 645]
+everything-to-one-shard    union==collection, no duplicates for counts 1,3,8,13; N=8 sizes [5, 731, 702, 757, 685, 761, 809, 712]
+Before (B's output on 790e3e41): all-zero [5162, 0, 0, 0, 0, 0, 0, 0]; nan [5162, 0, ...]; all-inf [5113, 17, 3, 9, 5, 2, 12, 1].
+
+== 5. required_plugins (B N2) and strict xfail raises= (B N1)
+gateway_v2, tests/edge/test_v2_leaks_phase.py:
+  with pytest-timeout:           7 passed in 0.37s
+  plugin blocked (-p no:timeout): exit 4, ERROR: Missing required plugins: pytest-timeout>=2.3
+Scratch project, timeout = 2 s, a 30 s sleep under xfail(strict=True):
+  XFAIL tests/test_hang.py::test_hang_xfail_without_raises - no raises=
+  XFAIL tests/test_hang.py::test_assertion_still_xfails_with_raises - the counterexample
+  FAILED tests/test_hang.py::test_hang_xfail_with_raises - Failed: Timeout (>2....
+  1 failed, 2 xfailed in 4.02s
+
+== 6. image-digest CPU guard (A NIT 2)
+The LGW03-1 heredoc, run on this 2-CPU host (docker not reached):
+  exit 1 | LGW03-1 GHA FAIL: this runner has 2 CPUs; --cpus=4 needs 4 or more. Standard runners for private
+  repositories have 2: move image-digest to a runner with 4+ cores (docs/ci/ENTERPRISE_SETUP.md).
+Specs (docs.github.com/en/actions/reference/runners/github-hosted-runners, read 12 Nov 2026): standard Linux
+x64 runner, public repositories 4 CPU / 16 GB; private repositories 2 CPU / 8 GB.
