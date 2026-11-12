@@ -1,0 +1,42 @@
+# Mutation rerun after the PR #113 review (Reviewer A, review 5869548782), 12 Nov 2026.
+# Each mutation is applied ALONE (mutate_targeted.py; anchors for M2a-M2d, M4a, M4b, M4d are Reviewer A's),
+# the 8 security test modules are run, then the product files are restored with `git checkout -- .`.
+# Tree: 235a15a987cde9e74ea155ecddd4fc052aa3f88f, in a separate detached worktree (product code identical to develop).
+# Host: Postgres 16 + Redis 7.0 (CI: Redis 7.4), Python 3.12. This host's Postgres has no pgvector, so these local
+# runs use an out-of-repo settings shim (not committed): policy migration 0021 skips CREATE EXTENSION vector and
+# creates attack_vault_embeddings with a TEXT column. Nothing in control reads that table. CI runs without the shim.
+# cmd (control/, under the heavy and ctl-db locks):
+#   python manage.py test <8 security modules> --noinput --keepdb
+#   8 security modules = core.tests.{test_gateway_key_owner_perm,test_ingestion_auth,test_isolation_notify,
+#     test_kill_switch_credential,test_module_16_telemetry,test_policy_compile_org_assertion}
+#     mcp_connector.tests.test_oauth_transport_guard policy.tests.test_cdl_wasa_compliance
+# Clean run first: the 11 modules this PR changes.
+
+00_clean (11 modules) rc=0 Ran 72 tests in 32.925s OK
+
+# mutation (applied alone)                    verdict  failures  failing tests
+M2e producer queue key -> "event_queue"       CAUGHT   5         test_bearer_agent_key_accepted_on_batch, test_bearer_agent_key_accepted_on_single_event,
+                                                                 test_org_key_batch_is_scoped_to_key_org, test_org_key_event_is_scoped_to_key_org,
+                                                                 test_x_agent_key_header_accepted
+M4a org resolution honours ?organization_id   CAUGHT   1         test_plain_superuser_explicit_other_org_compiles_own_org_only
+    for superusers (auth/utils.py)
+M4b compile guard exempts superusers          CAUGHT   1         test_org_mismatch_is_rejected_for_superuser            (SURVIVED at c48b355d)
+    (policy/compile_views.py)
+M4a + M4b together                            CAUGHT   3         test_org_mismatch_is_rejected_for_superuser, test_plain_superuser_explicit_other_org_compiles_own_org_only,
+                                                                 test_plain_superuser_without_org_cannot_compile_other_org
+M4d is_platform_operator drops the is_staff   CAUGHT   1         test_operator_flag_without_staff_compiles_own_org_only (SURVIVED at c48b355d)
+    check (auth/models.py)
+M2a ingest top-level org from body            CAUGHT   2         test_org_key_batch_is_scoped_to_key_org, test_org_key_event_is_scoped_to_key_org
+M2b ingest metadata org from body             CAUGHT   2         test_org_key_batch_is_scoped_to_key_org, test_org_key_event_is_scoped_to_key_org
+M2c inactive org agent key accepted           CAUGHT   1         test_inactive_org_key_rejected
+M2d global key reported as persisted          CAUGHT   1         test_bearer_agent_key_accepted_on_single_event
+(each mutation run: Ran 62 tests in 19-21 s)
+
+# A2 proof, restore side: producer key back to "telemetry:events"
+M2e_restored (core.tests.test_ingestion_auth) rc=0 Ran 9 tests in 0.110s OK
+# M2e SURVIVED at c48b355d (Reviewer A: Ran 9 tests OK) because the tests compared the key with the producer's
+# own constant; they now compare with core.tasks.REDIS_TELEMETRY_KEY, the list the drain reads.
+
+# Not rerun here: Reviewer A's other 14 single mutations (M1, M1b, M3, M4c, M5, M5b, M6a, M6b, M7a-M7e, M8), all
+# CAUGHT at c48b355d. The tests those mutations hit are unchanged by the review fixes. M2a-M2d were rerun because the
+# ingestion helper they go through changed (A2).

@@ -10,7 +10,8 @@ FAILED (failures=12)
 #   M4a alone -> 1 failure (test_plain_superuser_explicit_other_org_compiles_own_org_only)
 #   M4b alone -> 0 failures: SURVIVED. Nothing reached the compile guard's superuser branch.
 #   test_plain_superuser_without_org_cannot_compile_other_org fails only when M4a and M4b are applied together.
-# M4b is now caught by test_org_mismatch_is_rejected_for_superuser (commit 7a2701946).
+# M4b is now caught by test_org_mismatch_is_rejected_for_superuser (commit 7a2701946); per-mutation rerun in
+# mutation-rerun-2026-11-12.txt.
 
 # mutation -> failing tests (all applied together)
 M1 key-owner org check removed           -> test_org_admin_cannot_mutate_other_org_key
