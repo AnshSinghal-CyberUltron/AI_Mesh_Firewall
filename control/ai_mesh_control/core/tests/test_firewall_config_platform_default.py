@@ -316,6 +316,18 @@ class PlatformDefaultReadsDoNotCreateItTests(TestCase):
         self.assertFalse(AuditLog.objects.filter(pk=old.pk).exists())  # model default retention: 90 days
         self.assertTrue(AuditLog.objects.filter(pk=recent.pk).exists())
 
+    def test_retention_cleanup_keeps_platform_default_audit_rows(self):
+        from core.tasks import cleanup_old_audit_logs
+
+        # The operator whose changes are audited also sets the default's retention_days.
+        FirewallConfig.objects.create(organization=None, retention_days=1)
+        trail = AuditLog.objects.create(action=PLATFORM_DEFAULT_AUDIT_ACTION, resource=PLATFORM_DEFAULT_RESOURCE)
+        other = AuditLog.objects.create(action="t130-orphan", resource="x")
+        AuditLog.objects.filter(pk__in=[trail.pk, other.pk]).update(created_at=timezone.now() - timedelta(days=2))
+        cleanup_old_audit_logs()
+        self.assertTrue(AuditLog.objects.filter(pk=trail.pk).exists())
+        self.assertFalse(AuditLog.objects.filter(pk=other.pk).exists())
+
 
 class SocKpisDoesNotCreatePlatformDefaultTests(AnalyticsAPITestCase):
     def test_soc_kpis_does_not_create_the_platform_default(self):

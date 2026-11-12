@@ -1500,6 +1500,12 @@ class FirewallConfig(models.Model):
         }
 
 
+# AuditLog action of a platform-default FirewallConfig write (#130). The org-NULL retention purge
+# keeps these rows (core.tasks.cleanup_old_audit_logs): the operator whose changes they record also
+# sets the platform default's retention_days, which drives that purge.
+PLATFORM_DEFAULT_AUDIT_ACTION = "platform_default_config_updated"
+
+
 PLATFORM_GUARD_MODEL_NAMES = frozenset(
     {
         # Current user-facing platform model name (display: "ZeroShield Model").

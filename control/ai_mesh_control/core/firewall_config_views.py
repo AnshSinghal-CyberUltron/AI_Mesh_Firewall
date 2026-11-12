@@ -21,11 +21,10 @@ from rest_framework.views import APIView
 
 from auth.models import is_platform_operator
 from core.firewall_config_serializer import FirewallConfigSerializer
-from core.models import AuditLog, FirewallConfig
+from core.models import PLATFORM_DEFAULT_AUDIT_ACTION, AuditLog, FirewallConfig
 
 logger = logging.getLogger(__name__)
 
-PLATFORM_DEFAULT_AUDIT_ACTION = "platform_default_config_updated"
 PLATFORM_DEFAULT_RESOURCE = "firewall_config:platform_default"
 _NOT_AUDITED = frozenset({"id", "organization", "updated_at", "updated_by"})
 
