@@ -41,7 +41,7 @@ from types import MappingProxyType
 from typing import Any, Protocol
 
 from gateway_v2.admit.budget_state import BudgetSnapshot, budget_applier
-from gateway_v2.admit.identity import IdentityCache, identity_applier, principal_of
+from gateway_v2.admit.identity import IdentityCache, principal_of
 from gateway_v2.admit.killswitch import (
     KillSwitchSnapshot,
     KillSwitchState,
@@ -294,16 +294,15 @@ class StateRuntime:
     def _key_applier(self) -> Callable[[FeedRound], None]:
         """The KEY applier: evict the identity cache AND invalidate the GCRA cache on a delta.
 
-        `identity_applier` already evicts exactly the key hashes a KEY delta names from the identity
-        cache (and advances the applied position on an empty round via `mark_applied`). The GCRA
-        cache must drop the SAME hashes so a key whose resolved `Principal` changed rebuilds its
-        per-worker `LocalGCRA` from the updated `rate_per_s`/`burst` (Req 3.3). `on_delta` returns
-        the evicted hashes, so this composes the shipped applier's eviction with a
-        `_gcra_invalidate` call over the same hashes — one KEY delta, both caches invalidated
-        together. A round with no records only advances the position and invalidates nothing
-        (there is nothing to rebuild).
+        `on_delta` evicts exactly the key hashes a KEY delta names from the identity cache, as
+        `identity_applier` does. The GCRA cache must drop the SAME hashes so a key whose resolved
+        `Principal` changed rebuilds its per-worker `LocalGCRA` from the updated
+        `rate_per_s`/`burst` (Req 3.3). `on_delta` returns the evicted hashes, so this composes the
+        eviction with a `_gcra_invalidate` call over the same hashes — one KEY delta, both caches
+        invalidated together. A round with no records only advances the position
+        (`mark_applied`) and invalidates nothing (there is nothing to rebuild). Faults are handled
+        here, once, whether or not the round also carries records.
         """
-        identity = identity_applier(self.identity_cache)
 
         def apply(round_: FeedRound) -> None:
             if round_.faults:
@@ -331,7 +330,7 @@ class StateRuntime:
                     self._gcra_invalidate(evicted)
                 self._revocation_observe(round_.records)
             else:
-                identity(round_)
+                self.identity_cache.mark_applied(round_.manifest.feed_seq)
 
         return apply
 
