@@ -48,6 +48,8 @@ Also checked:
 
 ## 4. Dispatch client benchmark (`client_bench.py`, `upstream.py`, `run_bench.sh` → `client_results.json`)
 
+> **Superseded for scale claims (revision 2, 12 Nov).** `upstream.py` writes each whole response in one `transport.write`, so aiohttp read each stream in **1** read while httpx parsed 23 events (both plan reviews). These numbers measure a burst, not a model stream. The plan's §6 now rests on paced streams: `rev2/RESULTS.md`.
+
 ```
 BENCH_LOCK=env run_bench.sh <python> client_results.json --requests 1500 --warmup 200 --repeats 2 --concurrency 32 --memory-connections 256
 for c in 1 8 128; do BENCH_LOCK=env run_bench.sh <python> conc_$c.json --only httpx_raw,aiohttp_raw,design --requests 800 --warmup 100 --repeats 2 --concurrency $c; done   # -> client_concurrency.json

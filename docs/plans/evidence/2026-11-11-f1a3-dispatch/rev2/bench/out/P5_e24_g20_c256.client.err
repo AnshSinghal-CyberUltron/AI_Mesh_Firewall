@@ -1,0 +1,5 @@
+{"variant": "httpx_raw", "thread_us_median": 20689.5, "proc_us_median": 20689.5, "thread_us_runs": [22168.3, 19210.7], "util_runs": [0.926, 0.776], "wall_s_runs": [24.51, 25.36], "events_per_req": 25.0, "errors": 0}
+{"variant": "httpx_decode", "thread_us_median": 21357.2, "proc_us_median": 21357.2, "thread_us_runs": [20825.5, 21889.0], "util_runs": [0.875, 0.915], "wall_s_runs": [24.37, 24.49], "events_per_req": 24.0, "errors": 0}
+{"variant": "aiohttp_design", "thread_us_median": 793.1, "proc_us_median": 793.1, "thread_us_runs": [814.0, 772.1], "util_runs": [0.378, 0.354], "wall_s_runs": [2.2, 2.24], "events_per_req": 24.0, "errors": 0}
+{"variant": "aiohttp_raw", "thread_us_median": 466.0, "proc_us_median": 466.0, "thread_us_runs": [453.4, 478.6], "util_runs": [0.217, 0.225], "wall_s_runs": [2.14, 2.18], "events_per_req": 24.9, "errors": 0}
+{"variant": "aiohttp_decode", "thread_us_median": 733.9, "proc_us_median": 733.9, "thread_us_runs": [683.2, 784.6], "util_runs": [0.283, 0.359], "wall_s_runs": [2.48, 2.24], "events_per_req": 24.0, "errors": 0}

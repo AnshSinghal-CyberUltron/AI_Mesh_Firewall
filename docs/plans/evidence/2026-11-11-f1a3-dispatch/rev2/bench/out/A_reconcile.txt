@@ -1,0 +1,8 @@
+gap_ms=0 rep=1 {"variant": "httpx", "n": 600, "conc": 32, "cpu_us_per_req": 3255.3, "reads_per_req": 23.0, "wall_s": 2.38}
+gap_ms=0 rep=2 {"variant": "httpx", "n": 600, "conc": 32, "cpu_us_per_req": 3243.6, "reads_per_req": 23.0, "wall_s": 2.33}
+gap_ms=0 rep=1 {"variant": "aiohttp", "n": 600, "conc": 32, "cpu_us_per_req": 130.9, "reads_per_req": 1.0, "wall_s": 0.09}
+gap_ms=0 rep=2 {"variant": "aiohttp", "n": 600, "conc": 32, "cpu_us_per_req": 144.3, "reads_per_req": 1.0, "wall_s": 0.12}
+gap_ms=5 rep=1 {"variant": "httpx", "n": 600, "conc": 32, "cpu_us_per_req": 3860.8, "reads_per_req": 23.0, "wall_s": 3.4}
+gap_ms=5 rep=2 {"variant": "httpx", "n": 600, "conc": 32, "cpu_us_per_req": 3501.1, "reads_per_req": 23.0, "wall_s": 2.94}
+gap_ms=5 rep=1 {"variant": "aiohttp", "n": 600, "conc": 32, "cpu_us_per_req": 522.1, "reads_per_req": 22.96, "wall_s": 2.35}
+gap_ms=5 rep=2 {"variant": "aiohttp", "n": 600, "conc": 32, "cpu_us_per_req": 535.3, "reads_per_req": 23.0, "wall_s": 2.35}
